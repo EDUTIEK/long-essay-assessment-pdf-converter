@@ -1,1 +1,1 @@
-# long-essay-assessment-pdf-converter
+# long-essay-pdf-converter
