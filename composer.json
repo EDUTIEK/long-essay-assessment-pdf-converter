@@ -1,6 +1,7 @@
 {
     "name": "EDUTIEK/long-essay-pdf-converter",
     "description": "Convert PDF files to images.",
+    "minimum-stability": "dev",
     "type": "project",
     "license": "GPLv3",
     "optimize-autoloader": true,
