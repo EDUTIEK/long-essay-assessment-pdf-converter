@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace LongEssayPDFConverter\ImageMagick;
 
 use LongEssayPDFConverter\PDFImage as PDFImageInterface;
+use LongEssayPDFConverter\ImageDescriptor;
 use Imagick;
 use Exception;
 
@@ -20,15 +21,15 @@ class PDFImage implements PDFImageInterface
 
     public function asOnePerPage($pdf, string $size = PDFImageInterface::NORMAL): array
     {
-        return iterator_to_array($this->map([$this, 'pdfAsStream'], $this->prepare($pdf, $size)));
+        return iterator_to_array($this->map([$this, 'pdfAsImage'], $this->prepare($pdf, $size)));
     }
 
-    public function asOne($pdf, string $size = PDFImageInterface::NORMAL)
+    public function asOne($pdf, string $size = PDFImageInterface::NORMAL): ImageDescriptor
     {
         $magic = $this->prepare($pdf, $size);
         $magic = $magic->appendImages(true);
 
-        return $this->pdfAsStream($magic);
+        return $this->pdfAsImage($magic);
     }
 
     private function prepare($pdf, string $size): Imagick
@@ -41,7 +42,7 @@ class PDFImage implements PDFImageInterface
         return $magic;
     }
 
-    private function pdfAsStream(Imagick $magic)
+    private function pdfAsImage(Imagick $magic): ImageDescriptor
     {
         // $magic->sharpenImage(0, 1);
         $magic->setImageCompressionQuality(100);
@@ -50,7 +51,7 @@ class PDFImage implements PDFImageInterface
         $magic->writeImageFile($fd, $this->output_format);
         rewind($fd);
 
-        return $fd;
+        return new ImageDescriptor($fd, $magic->getImageWidth(), $magic->getImageHeight(), $this->output_format);
     }
 
     private function assertSupportedFormat(string $format): void
@@ -60,7 +61,7 @@ class PDFImage implements PDFImageInterface
         }
     }
 
-    private function map(callable $map, $iterable)
+    private function map(callable $map, iterable $iterable): iterable
     {
         foreach ($iterable as $item) {
             yield $map($item);

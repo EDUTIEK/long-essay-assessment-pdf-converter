@@ -16,7 +16,7 @@ interface PDFImage
      * Returns an image for each page in the given PDF.
      *
      * @param resource $pdf
-     * @return resource[]
+     * @return list<ImageDescriptor>
      */
     public function asOnePerPage($pdf, string $size = PDFImage::THUMBNAIL): array;
 
@@ -24,7 +24,6 @@ interface PDFImage
      * Returns an image of all PDF pages appended below each other.
      *
      * @param resource $pdf
-     * @return resource
      */
-    public function asOne($pdf, string $size = PDFImage::THUMBNAIL);
+    public function asOne($pdf, string $size = PDFImage::THUMBNAIL): ImageDescriptor;
 }

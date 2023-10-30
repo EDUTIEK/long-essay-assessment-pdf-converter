@@ -6,6 +6,7 @@ namespace LongEssayPDFConverter\Tests\ImageMagick;
 
 use PHPUnit\Framework\TestCase;
 use LongEssayPDFConverter\ImageMagick\PDFImage;
+use LongEssayPDFConverter\ImageDescriptor;
 use Imagick;
 
 class PDFImageTest extends TestCase
@@ -23,13 +24,13 @@ class PDFImageTest extends TestCase
         $pdf_image = new PDFImage();
 
         $pdf = fopen($this->dummyPDF(), 'r');
-        $fds = $pdf_image->asOnePerPage($pdf, ...$args);
+        $images = $pdf_image->asOnePerPage($pdf, ...$args);
         fclose($pdf);
 
-        $this->assertSame(2, count($fds));
-        foreach ($fds as $fd) {
-            $this->assertPNGOfSize($fd, $width, $height);
-            fclose($fd);
+        $this->assertSame(2, count($images));
+        foreach ($images as $image) {
+            $this->assertPNGOfSize($image, $width, $height);
+            fclose($image->stream());
         }
     }
 
@@ -54,14 +55,18 @@ class PDFImageTest extends TestCase
         ];
     }
 
-    private function assertPNGOfSize($fd, int $width, int $height): void
+    private function assertPNGOfSize(ImageDescriptor $image, int $width, int $height): void
     {
         $magic = new Imagick();
-        $magic->readImageFile($fd);
+        $magic->readImageFile($image->stream());
 
         $this->assertSame('PNG', $magic->identifyFormat('%m'));
         $this->assertSame($width, $magic->getImageWidth());
         $this->assertSame($height, $magic->getImageHeight());
+
+        $this->assertSame('PNG', $image->type());
+        $this->assertSame($width, $image->width());
+        $this->assertSame($height, $image->height());
     }
 
     private function dummyPDF(): string
