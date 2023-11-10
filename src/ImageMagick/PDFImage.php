@@ -12,11 +12,13 @@ use Exception;
 class PDFImage implements PDFImageInterface
 {
     private string $output_format;
+    private int $output_quality;
 
-    public function __construct(string $output_format = 'PNG')
+    public function __construct(string $output_format = 'JPG', int $output_quality=20)
     {
         $this->assertSupportedFormat($output_format);
         $this->output_format = $output_format;
+        $this->output_quality = $output_quality;
     }
 
     public function asOnePerPage($pdf, string $size = PDFImageInterface::NORMAL): array
@@ -45,7 +47,7 @@ class PDFImage implements PDFImageInterface
     private function pdfAsImage(Imagick $magic): ImageDescriptor
     {
         // $magic->sharpenImage(0, 1);
-        $magic->setImageCompressionQuality(100);
+        $magic->setImageCompressionQuality($this->output_quality);
 
         $fd = fopen('php://temp', 'w+');
         $magic->writeImageFile($fd, $this->output_format);
@@ -71,8 +73,8 @@ class PDFImage implements PDFImageInterface
     private function dpiOfSize(string $size): int
     {
         $dpi_map = [
-            PDFImageInterface::NORMAL => 100,
-            PDFImageInterface::THUMBNAIL => 12,
+            PDFImageInterface::NORMAL => 300,
+            PDFImageInterface::THUMBNAIL => 30,
         ];
 
         if (!isset($dpi_map[$size])) {
