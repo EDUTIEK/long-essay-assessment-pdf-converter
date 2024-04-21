@@ -26,7 +26,7 @@ class PDFImage implements PDFImageInterface
         return iterator_to_array($this->map([$this, 'pdfAsImage'], $this->prepare($pdf, $size)));
     }
 
-    public function asOne($pdf, string $size = PDFImageInterface::NORMAL): ImageDescriptor
+    public function asOne($pdf, string $size = PDFImageInterface::NORMAL): ?ImageDescriptor
     {
         $magic = $this->prepare($pdf, $size);
         $magic = $magic->appendImages(true);

@@ -25,5 +25,5 @@ interface PDFImage
      *
      * @param resource $pdf
      */
-    public function asOne($pdf, string $size = PDFImage::THUMBNAIL): ImageDescriptor;
+    public function asOne($pdf, string $size = PDFImage::THUMBNAIL): ?ImageDescriptor;
 }
