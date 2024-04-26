@@ -61,10 +61,7 @@ class PDFImageGS implements PDFImageInterface
 
         $images = [];
         foreach (glob($outputDir . '/*.jpg') as $file) {
-            $magic = new Imagick($file);
-            $height = $magic->getImageHeight();
-            $width = $magic->getImageWidth();
-            unset($magic);
+            list($width, $height) = $this->getImageSizes($file);
 
             $number = (int) basename($file, 'jpg');
             $fp = fopen($file, 'r');
@@ -114,5 +111,36 @@ class PDFImageGS implements PDFImageInterface
         }
 
         return $dpi_map[$size];
+    }
+
+    /**
+     * Get Width and Height of an
+     * @param string $file
+     * @return array{int, int}
+     */
+    private function getImageSizes(string $file) : array
+    {
+        // prefer gd because of better resource usage
+        if (extension_loaded('gd')) {
+            $info = gd_info();
+            if (!empty($info['JPEG Support'])) {
+                $sizes = getimagesize($file);
+                if (is_array($sizes)) {
+                    return [(int) $sizes[0], (int) $sizes[1]];
+                }
+            }
+        }
+
+        // try imagick as fallback
+        if (extension_loaded('imagick'))
+        {
+            $magic = new Imagick($file);
+            $height = $magic->getImageHeight();
+            $width = $magic->getImageWidth();
+            return [$width, $height];
+        }
+
+        throw new Exception("Can't get image sizes of " . $file);
+
     }
 }
