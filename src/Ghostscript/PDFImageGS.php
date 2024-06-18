@@ -8,6 +8,10 @@ use LongEssayPDFConverter\PDFImage as PDFImageInterface;
 use LongEssayPDFConverter\ImageDescriptor;
 use Imagick;
 use Exception;
+use Iterator;
+use DirectoryIterator;
+use CallbackFilterIterator;
+use SplFileInfo;
 
 class PDFImageGS implements PDFImageInterface
 {
@@ -41,59 +45,70 @@ class PDFImageGS implements PDFImageInterface
         $inputFile = $meta['uri'];
         $this->assertFile($inputFile);
 
-        // use '#' instead of '%' as it gets replaced by 'escapeshellarg' on windows!
         $outputDir = rtrim($this->workdir, '/') . '/pdf2jpg_'. bin2hex(random_bytes(8));
         mkdir($outputDir);
-        $outputFile = $outputDir . "/#04d.jpg";
 
-        // create images with ghostscript
-        $args = sprintf(
-            "-dBATCH -dNOPAUSE -dSAFER -sDEVICE=jpeg -dJPEGQ=90 -r%s -o %s %s",
-            $this->dpiOfSize($size),
-            str_replace("#", "%", escapeshellarg($outputFile)),
-            escapeshellarg($inputFile)
-        );
-
-        $output = [];
-        $result_code = null;
-        $command = escapeshellcmd($this->path_to_gs) . ' ' . $args;
-        exec($command, $output, $result_code);
+        $this->gs($this->dpiOfSize($size), $inputFile, $outputDir . '/%04d.jpg');
 
         $images = [];
-        foreach (glob($outputDir . '/*.jpg') as $file) {
-            list($width, $height) = $this->getImageSizes($file);
+        foreach ($this->allFilesWithExtension($outputDir, 'jpg') as $file) {
+            [$width, $height] = $this->getImageSizes($file->getPathname());
 
-            $number = (int) basename($file, 'jpg');
-            $fp = fopen($file, 'r');
-
-            $images[$number] = new ImageDescriptor(
-              $fp,
-              $width,
-              $height,
-              'image/jpeg'
+            $images[(int) $file->getBasename('.jpg')] = new ImageDescriptor(
+                fopen($file->getPathname(), 'rb'),
+                $width,
+                $height,
+                'image/jpeg'
             );
         }
 
         return $images;
     }
 
-    public function asOne($pdf, string $size = PDFImageInterface::NORMAL): ?ImageDescriptor
+    public function asOne($pdf, string $size = PDFImageInterface::NORMAL): ImageDescriptor
     {
-        return null;
+        $images = $this->asOnePerPage($pdf, $size);
+        [$width, $height] = array_reduce($images, fn($s, $img) => [
+            max($s[0], $img->width()),
+            $s[1] + $img->height(),
+        ], [0, 0]);
+
+        $out = imagecreatetruecolor($width, $height);
+        $color = imagecolorallocate($out, 255, 255, 255);
+        imagefill($out, 0, 0, $color);
+
+        $prev_y = 0;
+        foreach ($images as $image) {
+            $file = stream_get_meta_data($image->stream())['uri'];
+            $gd = imagecreatefromjpeg($file);
+            imagecopymerge($out, $gd, 8, $prev_y, 0, 0, $image->width(), $image->height(), 100);
+            $prev_y += $image->height();
+            fclose($image->stream());
+        }
+
+        $out_stream = tmpfile();
+        imagejpeg($out, $out_stream);
+        rewind($out_stream);
+
+        return new ImageDescriptor($out_stream, $width, $height, 'image/jpeg');
     }
 
-    private function assertFile($path) {
+    private function assertFile($path)
+    {
         if (!is_file($path)) {
             throw new Exception('File Path "' . $path . '" is not a file');
         }
     }
 
-    private function assertExecutable($path): void{
+    private function assertExecutable($path): void
+    {
         if (!is_executable($path)) {
             throw new Exception('Ghostscript Path "' . $path . '" is not executable');
         }
     }
-    private function assertDirectory($path): void{
+
+    private function assertDirectory($path): void
+    {
         if (!is_dir($path)) {
             throw new Exception('Working directory "' . $path . '" is not a directory');
         }
@@ -141,6 +156,55 @@ class PDFImageGS implements PDFImageInterface
         }
 
         throw new Exception("Can't get image sizes of " . $file);
+    }
 
+    private function windowsSafeFilenameEscape(string $value): string
+    {
+        if (strtoupper(substr(PHP_OS, 0, 3)) !== 'WIN') {
+            return escapeshellarg($value);
+        }
+
+        if (false !== strpos($value, '|')) {
+            throw new Exception('Pipes are not allowed in Windows file names.');
+        }
+
+        // Seems like escapeshellarg is broken for windows... % is removed instead of escaped.
+        // % signs can be escaped with ^ in cmd.
+        // Using | as a placeholder instead of #, because | is not allowed in Windows file names and it is not escaped by escapeshellarg.
+        return str_replace('|', '^%', escapeshellarg(str_replace('%', '|', $value)));
+    }
+
+    private function gs(int $dpi, string $in_file, string $out_file): void
+    {
+        $command = sprintf(
+            '%s %s -o %s %s',
+            $this->path_to_gs,
+            join(' ', array_map('escapeshellarg', $this->gsFlags($dpi))),
+            $this->windowsSafeFilenameEscape($out_file),
+            $this->windowsSafeFilenameEscape($in_file)
+        );
+
+        exec($command, $ignore_output, $exit_code);
+
+        if ($exit_code) {
+            throw new Exception('Error while executing Ghostscript command: ' . $command);
+        }
+    }
+
+    /**
+     * @return Iterator<SplFileInfo>
+     */
+    private function allFilesWithExtension(string $dir, string $extension): Iterator
+    {
+        return new CallbackFilterIterator(
+            new DirectoryIterator($dir),
+            fn(SplFileInfo $file) => $file->isFile() && $file->getExtension() === $extension
+        );
+    }
+
+    private function gsFlags(int $dpi): array
+    {
+        // For custom sizes besides known ones: -g200x100 instead of -sPAPERSIZE=<FORMAT>
+        return ["-r$dpi", '-dBATCH', '-dNOPAUSE', '-dSAFER', '-q', '-sDEVICE=jpeg', '-dJPEGQ=90', '-sPAPERSIZE=a4', '-dFitPage'];
     }
 }
