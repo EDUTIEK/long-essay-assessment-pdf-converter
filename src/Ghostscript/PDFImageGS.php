@@ -61,6 +61,7 @@ class PDFImageGS implements PDFImageInterface
                 'image/jpeg'
             );
         }
+        ksort($images);
 
         return $images;
     }
